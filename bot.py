@@ -1,6 +1,12 @@
 import os
+import re
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -16,6 +22,9 @@ from database import (
     parse_caption,
     get_chapters,
     get_categories,
+    find_note,
+    find_note_by_chapter_number,
+    find_grammar_note,
 )
 
 
@@ -148,6 +157,7 @@ async def chapter_menu(query, subject):
     keyboard = []
 
     for chapter in chapters:
+
         keyboard.append([
             InlineKeyboardButton(
                 f"📖 {chapter}",
@@ -163,6 +173,7 @@ async def chapter_menu(query, subject):
     ])
 
     if not chapters:
+
         message = (
             "╭━━━━━━━━━━━━━━━━━━━━╮\n"
             "📖 *Sᴇʟᴇᴄᴛ Cʜᴀᴘᴛᴇʀ*\n"
@@ -170,7 +181,9 @@ async def chapter_menu(query, subject):
             "❌ *Nᴏ Cʜᴀᴘᴛᴇʀs Fᴏᴜɴᴅ*\n\n"
             "📚 Notes database me abhi is subject ka note nahi hai."
         )
+
     else:
+
         message = (
             "╭━━━━━━━━━━━━━━━━━━━━╮\n"
             "📖 *Sᴇʟᴇᴄᴛ Cʜᴀᴘᴛᴇʀ*\n"
@@ -197,6 +210,7 @@ async def grammar_menu(query, subject):
     keyboard = []
 
     for category in categories:
+
         keyboard.append([
             InlineKeyboardButton(
                 f"📖 {category}",
@@ -212,13 +226,16 @@ async def grammar_menu(query, subject):
     ])
 
     if not categories:
+
         message = (
             "╭━━━━━━━━━━━━━━━━━━━━╮\n"
             "📖 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n"
             "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
             "❌ *Nᴏ Cᴀᴛᴇɢᴏʀɪᴇs Fᴏᴜɴᴅ*"
         )
+
     else:
+
         message = (
             "╭━━━━━━━━━━━━━━━━━━━━╮\n"
             "📖 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n"
@@ -235,20 +252,74 @@ async def grammar_menu(query, subject):
 
 
 # ─────────────────────────────────────
+# FORWARD NOTE
+# ─────────────────────────────────────
+
+async def forward_note(query, context, note):
+
+    if not note:
+
+        await query.edit_message_text(
+            "❌ *Nᴏᴛᴇ Nᴏᴛ Fᴏᴜɴᴅ*\n\n"
+            "📚 Is note ka PDF database mein nahi mila.",
+            parse_mode="Markdown",
+        )
+
+        return
+
+    (
+        chat_id,
+        message_id,
+        title,
+        subject,
+        chapter,
+        category,
+        item_name,
+        date
+    ) = note
+
+    try:
+
+        await context.bot.forward_message(
+            chat_id=query.message.chat.id,
+            from_chat_id=chat_id,
+            message_id=message_id,
+        )
+
+    except Exception as error:
+
+        print(f"Forward error: {error}")
+
+        await query.edit_message_text(
+            "❌ *Nᴏᴛᴇ Sᴇɴᴅ Nᴀʜɪ Hᴜᴀ*\n\n"
+            "⚠️ Notes Vault message access mein problem aa rahi hai.",
+            parse_mode="Markdown",
+        )
+
+
+# ─────────────────────────────────────
 # BUTTON HANDLER
 # ─────────────────────────────────────
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     query = update.callback_query
+
     await query.answer()
 
     data = query.data
 
+    # GET NOTE
     if data == "get_note":
+
         await subject_menu(query)
+
         return
 
+    # BACK HOME
     if data == "back_home":
 
         keyboard = [
@@ -265,8 +336,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
+
         return
 
+    # SUBJECT
     if data.startswith("subject|"):
 
         subject = data.split("|", 1)[1]
@@ -278,12 +351,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         if subject in grammar_subjects:
-            await grammar_menu(query, subject)
+
+            await grammar_menu(
+                query,
+                subject
+            )
+
         else:
-            await chapter_menu(query, subject)
+
+            await chapter_menu(
+                query,
+                subject
+            )
 
         return
 
+    # CHAPTER
     if data.startswith("chapter|"):
 
         parts = data.split("|", 2)
@@ -291,15 +374,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subject = parts[1]
         chapter = parts[2]
 
-        await query.edit_message_text(
-            f"📖 *{subject}*\n\n"
-            f"📚 *Chapter:* {chapter}\n\n"
-            "🔎 Note forwarding next step me connect hoga...",
-            parse_mode="Markdown",
+        # First try exact chapter
+        note = find_note(
+            subject=subject,
+            chapter=chapter
+        )
+
+        # If exact match fails, try chapter number
+        if not note:
+
+            match = re.search(
+                r"(\d+)",
+                chapter
+            )
+
+            if match:
+
+                chapter_number = match.group(1)
+
+                note = find_note_by_chapter_number(
+                    subject,
+                    chapter_number
+                )
+
+        await forward_note(
+            query,
+            context,
+            note
         )
 
         return
 
+    # GRAMMAR CATEGORY
     if data.startswith("category|"):
 
         parts = data.split("|", 2)
@@ -307,11 +413,77 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subject = parts[1]
         category = parts[2]
 
+        # Show category items
+        # We use database directly
+        from database import get_category_items
+
+        items = get_category_items(
+            subject,
+            category
+        )
+
+        keyboard = []
+
+        for item in items:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📖 {item}",
+                    callback_data=f"item|{subject}|{category}|{item}"
+                )
+            ])
+
+        keyboard.append([
+            InlineKeyboardButton(
+                "🔙 Bᴀᴄᴋ",
+                callback_data=f"subject|{subject}"
+            )
+        ])
+
+        if not items:
+
+            await query.edit_message_text(
+                "❌ *Nᴏ Iᴛᴇᴍs Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+
+            return
+
+        message = (
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            f"📖 *Sᴇʟᴇᴄᴛ {category.upper()}*\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Nᴏᴛᴇ*\n\n"
+            "🔄 *Rᴏᴛᴀᴛᴇ Yᴏᴜʀ Pʜᴏɴᴇ Tᴏ Sᴇᴇ Fᴜʟʟ Nᴀᴍᴇ*"
+        )
+
         await query.edit_message_text(
-            f"📖 *{subject}*\n\n"
-            f"📚 *Category:* {category}\n\n"
-            "🔎 Note forwarding next step me connect hoga...",
+            message,
             parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        return
+
+    # GRAMMAR ITEM
+    if data.startswith("item|"):
+
+        parts = data.split("|", 3)
+
+        subject = parts[1]
+        category = parts[2]
+        item_name = parts[3]
+
+        note = find_grammar_note(
+            subject,
+            category,
+            item_name
+        )
+
+        await forward_note(
+            query,
+            context,
+            note
         )
 
         return
@@ -331,17 +503,17 @@ async def channel_note_handler(
     if not post:
         return
 
-    caption = post.caption or ""
-
-    # Sirf PDF/document posts ko process karenge
+    # Only documents/PDF
     if not post.document:
         return
 
-    # Caption se information read karo
+    caption = post.caption or ""
+
     data = parse_caption(caption)
 
-    # Subject missing ho to note save nahi karna
+    # Subject required
     if not data["subject"]:
+        print("Skipped note: Subject missing")
         return
 
     add_note(
@@ -356,9 +528,295 @@ async def channel_note_handler(
     )
 
     print(
-        f"Note indexed: "
+        "Note indexed: "
         f"{data['subject']} | "
         f"{data['chapter'] or data['category']}"
+    )
+
+
+# ─────────────────────────────────────
+# DIRECT MESSAGE SEARCH
+# ─────────────────────────────────────
+
+async def message_search(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    if not update.message:
+        return
+
+    text = update.message.text.strip()
+
+    if not text:
+        return
+
+    # Ignore commands
+    if text.startswith("/"):
+        return
+
+    print(f"Search received: {text}")
+
+    # ─────────────────────────────
+    # SUBJECT ONLY
+    # Example: Science
+    # ─────────────────────────────
+
+    subjects = [
+        "Science",
+        "Math",
+        "English R",
+        "English Grammar",
+        "S.S.T",
+        "Computer",
+        "Punjabi R",
+        "Punjabi Grammar",
+        "Hindi R",
+        "Hindi Grammar",
+    ]
+
+    matched_subject = None
+
+    for subject in subjects:
+
+        if text.lower() == subject.lower():
+
+            matched_subject = subject
+
+            break
+
+    if matched_subject:
+
+        chapters = get_chapters(
+            matched_subject
+        )
+
+        if chapters:
+
+            keyboard = []
+
+            for chapter in chapters:
+
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📖 {chapter}",
+                        callback_data=(
+                            f"chapter|{matched_subject}|{chapter}"
+                        )
+                    )
+                ])
+
+            await update.message.reply_text(
+                "📖 *Sᴇʟᴇᴄᴛ Cʜᴀᴘᴛᴇʀ*\n\n"
+                "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Cʜᴀᴘᴛᴇʀ*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        else:
+
+            await update.message.reply_text(
+                "❌ *Nᴏ Cʜᴀᴘᴛᴇʀs Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+
+        return
+
+    # ─────────────────────────────
+    # SUBJECT + CHAPTER
+    # Example:
+    # Science Ch - 1
+    # ─────────────────────────────
+
+    match = re.match(
+        r"(?i)^(.+?)\s+ch\s*[-.]?\s*(\d+)\s*$",
+        text
+    )
+
+    if match:
+
+        subject = match.group(1).strip()
+        chapter_number = match.group(2).strip()
+
+        note = find_note_by_chapter_number(
+            subject,
+            chapter_number
+        )
+
+        if note:
+
+            try:
+
+                await context.bot.forward_message(
+                    chat_id=update.message.chat.id,
+                    from_chat_id=note[0],
+                    message_id=note[1],
+                )
+
+            except Exception as error:
+
+                print(
+                    f"Search forward error: {error}"
+                )
+
+                await update.message.reply_text(
+                    "❌ *Nᴏᴛᴇ Sᴇɴᴅ Nᴀʜɪ Hᴜᴀ*",
+                    parse_mode="Markdown"
+                )
+
+        else:
+
+            await update.message.reply_text(
+                "❌ *Nᴏᴛᴇ Nᴏᴛ Fᴏᴜɴᴅ*\n\n"
+                "📚 Is chapter ka note database mein nahi mila.",
+                parse_mode="Markdown"
+            )
+
+        return
+
+    # ─────────────────────────────
+    # CH - NUMBER
+    # Example:
+    # Ch - 1
+    # ─────────────────────────────
+
+    match = re.match(
+        r"(?i)^ch\s*[-.]?\s*(\d+)\s*$",
+        text
+    )
+
+    if match:
+
+        chapter_number = match.group(1)
+
+        await update.message.reply_text(
+            "📚 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Sᴜʙᴊᴇᴄᴛ Fɪʀsᴛ*",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔬 Sᴄɪᴇɴᴄᴇ",
+                        callback_data="subject|Science"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "➗ Mᴀᴛʜ",
+                        callback_data="subject|Math"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📘 Eɴɢʟɪsʜ R",
+                        callback_data="subject|English R"
+                    )
+                ],
+            ])
+        )
+
+        return
+
+    # ─────────────────────────────
+    # GRAMMAR SEARCH
+    # Example:
+    # Hindi Gr Letter
+    # ─────────────────────────────
+
+    grammar_match = re.match(
+        r"(?i)^(hindi|punjabi|english)\s+gr(?:ammar)?\s+(letter|story|essay|notice|e-mail|email|chapter)$",
+        text
+    )
+
+    if grammar_match:
+
+        language = grammar_match.group(1).lower()
+        category = grammar_match.group(2)
+
+        if language == "hindi":
+            subject = "Hindi Grammar"
+
+        elif language == "punjabi":
+            subject = "Punjabi Grammar"
+
+        else:
+            subject = "English Grammar"
+
+        if category.lower() == "email":
+            category = "E-mail"
+
+        categories = get_categories(
+            subject
+        )
+
+        actual_category = None
+
+        for item in categories:
+
+            if item.lower() == category.lower():
+
+                actual_category = item
+
+                break
+
+        if not actual_category:
+
+            await update.message.reply_text(
+                "❌ *Cᴀᴛᴇɢᴏʀʏ Nᴏᴛ Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+
+            return
+
+        from database import get_category_items
+
+        items = get_category_items(
+            subject,
+            actual_category
+        )
+
+        keyboard = []
+
+        for item in items:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📖 {item}",
+                    callback_data=(
+                        f"item|{subject}|"
+                        f"{actual_category}|{item}"
+                    )
+                )
+            ])
+
+        if items:
+
+            await update.message.reply_text(
+                f"📖 *Sᴇʟᴇᴄᴛ {actual_category}*\n\n"
+                "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Nᴏᴛᴇ*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        else:
+
+            await update.message.reply_text(
+                "❌ *Nᴏ Nᴏᴛᴇs Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+
+        return
+
+    # ─────────────────────────────
+    # UNKNOWN SEARCH
+    # ─────────────────────────────
+
+    await update.message.reply_text(
+        "🔎 *Nᴏᴛᴇ Fᴏᴜɴᴅ Nᴀʜɪ*\n\n"
+        "💡 Example:\n"
+        "`Science`\n"
+        "`Science Ch - 1`\n"
+        "`Hindi Gr Letter`",
+        parse_mode="Markdown"
     )
 
 
@@ -371,19 +829,44 @@ def main():
     token = os.getenv("BOT_TOKEN")
 
     if not token:
-        raise ValueError("BOT_TOKEN is not set")
+
+        raise ValueError(
+            "BOT_TOKEN is not set"
+        )
 
     setup_database()
 
-    app = Application.builder().token(token).build()
-
-    app.add_handler(CommandHandler("start", start))
-
-    app.add_handler(
-        CallbackQueryHandler(button_handler)
+    app = (
+        Application
+        .builder()
+        .token(token)
+        .build()
     )
 
-    # Notes Vault channel ke naye PDFs
+    # /start
+    app.add_handler(
+        CommandHandler(
+            "start",
+            start
+        )
+    )
+
+    # Buttons
+    app.add_handler(
+        CallbackQueryHandler(
+            button_handler
+        )
+    )
+
+    # Direct message search
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            message_search
+        )
+    )
+
+    # Notes Vault channel
     app.add_handler(
         MessageHandler(
             filters.UpdateType.CHANNEL_POST,
@@ -391,7 +874,9 @@ def main():
         )
     )
 
-    print("Nᴏᴛᴇs Sᴇᴀʀᴄʜ Bᴏᴛ is running...")
+    print(
+        "Nᴏᴛᴇs Sᴇᴀʀᴄʜ Bᴏᴛ is running..."
+    )
 
     app.run_polling(
         allowed_updates=Update.ALL_TYPES
