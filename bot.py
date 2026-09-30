@@ -6,11 +6,14 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 from database import (
     setup_database,
-    get_subjects,
+    add_note,
+    parse_caption,
     get_chapters,
     get_categories,
 )
@@ -242,13 +245,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # GET NOTE
     if data == "get_note":
         await subject_menu(query)
         return
 
-    # BACK HOME
     if data == "back_home":
+
         keyboard = [
             [
                 InlineKeyboardButton(
@@ -265,7 +267,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # SUBJECT
     if data.startswith("subject|"):
 
         subject = data.split("|", 1)[1]
@@ -283,7 +284,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # CHAPTER
     if data.startswith("chapter|"):
 
         parts = data.split("|", 2)
@@ -294,13 +294,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"📖 *{subject}*\n\n"
             f"📚 *Chapter:* {chapter}\n\n"
-            "🔎 Note search system next step me connect hoga...",
+            "🔎 Note forwarding next step me connect hoga...",
             parse_mode="Markdown",
         )
 
         return
 
-    # CATEGORY
     if data.startswith("category|"):
 
         parts = data.split("|", 2)
@@ -311,11 +310,56 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"📖 *{subject}*\n\n"
             f"📚 *Category:* {category}\n\n"
-            "🔎 Note search system next step me connect hoga...",
+            "🔎 Note forwarding next step me connect hoga...",
             parse_mode="Markdown",
         )
 
         return
+
+
+# ─────────────────────────────────────
+# CHANNEL NOTE INDEXER
+# ─────────────────────────────────────
+
+async def channel_note_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    post = update.channel_post
+
+    if not post:
+        return
+
+    caption = post.caption or ""
+
+    # Sirf PDF/document posts ko process karenge
+    if not post.document:
+        return
+
+    # Caption se information read karo
+    data = parse_caption(caption)
+
+    # Subject missing ho to note save nahi karna
+    if not data["subject"]:
+        return
+
+    add_note(
+        chat_id=post.chat.id,
+        message_id=post.message_id,
+        title=data["title"],
+        subject=data["subject"],
+        chapter=data["chapter"],
+        category=data["category"],
+        item_name=data["item_name"],
+        date=data["date"],
+    )
+
+    print(
+        f"Note indexed: "
+        f"{data['subject']} | "
+        f"{data['chapter'] or data['category']}"
+    )
 
 
 # ─────────────────────────────────────
@@ -334,11 +378,24 @@ def main():
     app = Application.builder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
+
+    app.add_handler(
+        CallbackQueryHandler(button_handler)
+    )
+
+    # Notes Vault channel ke naye PDFs
+    app.add_handler(
+        MessageHandler(
+            filters.UpdateType.CHANNEL_POST,
+            channel_note_handler
+        )
+    )
 
     print("Nᴏᴛᴇs Sᴇᴀʀᴄʜ Bᴏᴛ is running...")
 
-    app.run_polling()
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES
+    )
 
 
 if __name__ == "__main__":
