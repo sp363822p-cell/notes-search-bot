@@ -4,6 +4,10 @@ import re
 DATABASE = "notes.db"
 
 
+# ─────────────────────────────────────
+# DATABASE CONNECTION
+# ─────────────────────────────────────
+
 def connect_db():
     return sqlite3.connect(DATABASE)
 
@@ -37,7 +41,7 @@ def setup_database():
 
 
 # ─────────────────────────────────────
-# ADD NOTE
+# ADD / UPDATE NOTE
 # ─────────────────────────────────────
 
 def add_note(
@@ -56,7 +60,16 @@ def add_note(
 
     cursor.execute("""
         INSERT OR REPLACE INTO notes
-        (chat_id, message_id, title, subject, chapter, category, item_name, date)
+        (
+            chat_id,
+            message_id,
+            title,
+            subject,
+            chapter,
+            category,
+            item_name,
+            date
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         chat_id,
@@ -74,7 +87,7 @@ def add_note(
 
 
 # ─────────────────────────────────────
-# CAPTION PARSER
+# PARSE CAPTION
 # ─────────────────────────────────────
 
 def parse_caption(caption):
@@ -100,35 +113,46 @@ def parse_caption(caption):
         if not line:
             continue
 
-        # English Title
-        match = re.match(r"(?i)^title\s*[-:]\s*(.+)", line)
+        # ─────────────────────────────
+        # ENGLISH
+        # ─────────────────────────────
+
+        match = re.match(
+            r"(?i)^title\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["title"] = match.group(1).strip()
             continue
 
-        # English Subject
-        match = re.match(r"(?i)^subject\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"(?i)^subject\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["subject"] = match.group(1).strip()
             continue
 
-        # English Chapter
-        match = re.match(r"(?i)^chapter\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"(?i)^chapter\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["chapter"] = match.group(1).strip()
             continue
 
-        # Category
-        match = re.match(r"(?i)^category\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"(?i)^category\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["category"] = match.group(1).strip()
             continue
 
-        # Letter / Story / Essay / Notice / E-mail
         match = re.match(
             r"(?i)^(letter|story|essay|notice|e-mail|email)\s*[-:]\s*(.+)",
             line
@@ -139,12 +163,21 @@ def parse_caption(caption):
             data["item_name"] = match.group(2).strip()
 
             if not data["category"]:
-                data["category"] = match.group(1).strip().title()
+                data["category"] = (
+                    match.group(1)
+                    .strip()
+                    .title()
+                )
+
+            if data["category"].lower() == "email":
+                data["category"] = "E-mail"
 
             continue
 
-        # Date
-        match = re.match(r"(?i)^date\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"(?i)^date\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["date"] = match.group(1).strip()
@@ -154,46 +187,67 @@ def parse_caption(caption):
         # HINDI
         # ─────────────────────────────
 
-        match = re.match(r"^शीर्षक\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^शीर्षक\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["title"] = match.group(1).strip()
             continue
 
-        match = re.match(r"^विषय\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^विषय\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["subject"] = match.group(1).strip()
             continue
 
-        match = re.match(r"^अध्याय\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^अध्याय\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["chapter"] = match.group(1).strip()
             continue
 
-        match = re.match(r"^पत्र\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^पत्र\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["item_name"] = match.group(1).strip()
             data["category"] = "Letter"
             continue
 
-        match = re.match(r"^कहानी\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^कहानी\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["item_name"] = match.group(1).strip()
             data["category"] = "Story"
             continue
 
-        match = re.match(r"^लेख\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^लेख\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["item_name"] = match.group(1).strip()
             data["category"] = "Essay"
             continue
 
-        match = re.match(r"^दिनांक\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^दिनांक\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["date"] = match.group(1).strip()
@@ -203,54 +257,75 @@ def parse_caption(caption):
         # PUNJABI
         # ─────────────────────────────
 
-        match = re.match(r"^ਸਿਰਲੇਖ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਸਿਰਲੇਖ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["title"] = match.group(1).strip()
             continue
 
-        match = re.match(r"^ਵਿਸ਼ਾ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਵਿਸ਼ਾ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["subject"] = match.group(1).strip()
             continue
 
-        match = re.match(r"^ਪਾਠ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਪਾਠ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["chapter"] = match.group(1).strip()
             continue
 
-        match = re.match(r"^ਪੱਤਰ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਪੱਤਰ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["item_name"] = match.group(1).strip()
             data["category"] = "Letter"
             continue
 
-        match = re.match(r"^ਕਹਾਣੀ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਕਹਾਣੀ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["item_name"] = match.group(1).strip()
             data["category"] = "Story"
             continue
 
-        match = re.match(r"^ਲੇਖ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਲੇਖ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["item_name"] = match.group(1).strip()
             data["category"] = "Essay"
             continue
 
-        match = re.match(r"^ਮਿਤੀ\s*[-:]\s*(.+)", line)
+        match = re.match(
+            r"^ਮਿਤੀ\s*[-:]\s*(.+)",
+            line
+        )
 
         if match:
             data["date"] = match.group(1).strip()
             continue
 
-    # ─────────────────────────────
+    # ─────────────────────────────────
     # AUTO CATEGORY FROM TITLE
-    # ─────────────────────────────
+    # ─────────────────────────────────
 
     title_lower = data["title"].lower()
 
@@ -281,7 +356,7 @@ def parse_caption(caption):
 
 
 # ─────────────────────────────────────
-# SUBJECTS
+# GET ALL SUBJECTS
 # ─────────────────────────────────────
 
 def get_subjects():
@@ -307,7 +382,7 @@ def get_subjects():
 
 
 # ─────────────────────────────────────
-# CHAPTERS
+# GET CHAPTERS
 # ─────────────────────────────────────
 
 def get_chapters(subject):
@@ -334,7 +409,7 @@ def get_chapters(subject):
 
 
 # ─────────────────────────────────────
-# CATEGORIES
+# GET GRAMMAR CATEGORIES
 # ─────────────────────────────────────
 
 def get_categories(subject):
@@ -361,7 +436,38 @@ def get_categories(subject):
 
 
 # ─────────────────────────────────────
-# FIND EXACT NOTE
+# GET CATEGORY ITEMS
+# ─────────────────────────────────────
+
+def get_category_items(subject, category):
+
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT DISTINCT item_name
+        FROM notes
+        WHERE LOWER(subject) = LOWER(?)
+        AND LOWER(category) = LOWER(?)
+        AND item_name != ''
+        ORDER BY id
+    """, (
+        subject,
+        category
+    ))
+
+    items = [
+        row[0]
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+
+    return items
+
+
+# ─────────────────────────────────────
+# FIND NOTE
 # ─────────────────────────────────────
 
 def find_note(
@@ -427,7 +533,10 @@ def find_note(
         LIMIT 1
     """
 
-    cursor.execute(query, values)
+    cursor.execute(
+        query,
+        values
+    )
 
     result = cursor.fetchone()
 
@@ -440,12 +549,15 @@ def find_note(
 # FIND NOTE BY CHAPTER NUMBER
 # ─────────────────────────────────────
 
-def find_note_by_chapter_number(subject, chapter_number):
+def find_note_by_chapter_number(
+    subject,
+    chapter_number
+):
 
     conn = connect_db()
     cursor = conn.cursor()
 
-    pattern = f"{chapter_number} (%"
+    number = str(chapter_number).strip()
 
     cursor.execute("""
         SELECT
@@ -462,13 +574,15 @@ def find_note_by_chapter_number(subject, chapter_number):
         AND (
             LOWER(chapter) = LOWER(?)
             OR LOWER(chapter) LIKE LOWER(?)
+            OR LOWER(chapter) LIKE LOWER(?)
         )
         ORDER BY id DESC
         LIMIT 1
     """, (
         subject,
-        str(chapter_number),
-        pattern
+        number,
+        f"{number} %",
+        f"{number} (%"
     ))
 
     result = cursor.fetchone()
@@ -482,7 +596,11 @@ def find_note_by_chapter_number(subject, chapter_number):
 # FIND GRAMMAR NOTE
 # ─────────────────────────────────────
 
-def find_grammar_note(subject, category, item_name):
+def find_grammar_note(
+    subject,
+    category,
+    item_name
+):
 
     conn = connect_db()
     cursor = conn.cursor()
