@@ -359,27 +359,31 @@ def parse_caption(caption):
 # GET ALL SUBJECTS
 # ─────────────────────────────────────
 
-def get_subjects():
-
+def get_chapters(subject):
     conn = connect_db()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT DISTINCT subject
+        SELECT DISTINCT chapter
         FROM notes
-        WHERE subject != ''
-        ORDER BY subject
-    """)
+        WHERE LOWER(subject) = LOWER(?)
+        AND chapter != ''
+    """, (subject,))
 
-    subjects = [
-        row[0]
-        for row in cursor.fetchall()
-    ]
-
+    chapters = [row[0] for row in cursor.fetchall()]
     conn.close()
 
-    return subjects
+    def chapter_sort_key(chapter):
+        match = re.search(r'\d+', chapter)
 
+        if match:
+            return (0, int(match.group()), chapter.lower())
+
+        return (1, 999999, chapter.lower())
+
+    chapters.sort(key=chapter_sort_key)
+
+    return chapters
 
 # ─────────────────────────────────────
 # GET CHAPTERS
