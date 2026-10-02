@@ -636,3 +636,20 @@ def find_grammar_note(
     conn.close()
 
     return result
+    
+def delete_note_by_message(chat_id, message_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM notes
+        WHERE chat_id = ?
+        AND message_id = ?
+    """, (chat_id, message_id))
+
+    deleted = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    return deleted
