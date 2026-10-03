@@ -653,3 +653,17 @@ def delete_note_by_message(chat_id, message_id):
     conn.close()
 
     return deleted
+# ─────────────────────────────────────
+# DELETE NOTE BY MESSAGE ID
+# ─────────────────────────────────────
+
+def delete_note_by_message_id(chat_id, message_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        DELETE FROM notes
+        WHERE chat_id = ? AND message_id = ?
+    """, (chat_id, message_id))
+    conn.commit()
+    conn.close()
+    
