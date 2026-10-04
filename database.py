@@ -667,3 +667,100 @@ def delete_note_by_message_id(chat_id, message_id):
     conn.commit()
     conn.close()
     
+# ─────────────────────────────────────
+# MANUAL REMOVE SYSTEM
+# ─────────────────────────────────────
+
+def get_chapter_choices(subject):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT MIN(id), chapter
+        FROM notes
+        WHERE LOWER(subject) = LOWER(?)
+        AND chapter != ''
+        GROUP BY LOWER(chapter)
+        ORDER BY MIN(id)
+    """, (subject,))
+
+    chapters = cursor.fetchall()
+
+    conn.close()
+
+    return chapters
+
+
+def get_chapter_by_note_id(note_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            chat_id,
+            message_id,
+            title,
+            subject,
+            chapter,
+            category,
+            item_name,
+            date
+        FROM notes
+        WHERE id = ?
+        LIMIT 1
+    """, (note_id,))
+
+    result = cursor.fetchone()
+
+    conn.close()
+
+    return result
+
+
+def get_notes_in_chapter(subject, chapter):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            chat_id,
+            message_id,
+            title,
+            subject,
+            chapter,
+            category,
+            item_name,
+            date
+        FROM notes
+        WHERE LOWER(subject) = LOWER(?)
+        AND LOWER(chapter) = LOWER(?)
+        ORDER BY id
+    """, (
+        subject,
+        chapter
+    ))
+
+    notes = cursor.fetchall()
+
+    conn.close()
+
+    return notes
+
+
+def delete_note_by_id(note_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM notes
+        WHERE id = ?
+    """, (note_id,))
+
+    deleted = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    return deleted
