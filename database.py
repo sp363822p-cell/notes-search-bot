@@ -764,3 +764,26 @@ def delete_note_by_id(note_id):
     conn.close()
 
     return deleted
+# ─────────────────────────────────────
+# GET ALL SUBJECTS
+# ─────────────────────────────────────
+
+def get_subjects():
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT DISTINCT subject
+        FROM notes
+        WHERE subject != ''
+        ORDER BY subject
+    """)
+
+    subjects = [
+        row[0]
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+
+    return subjects
