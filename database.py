@@ -91,7 +91,6 @@ def add_note(
 # ─────────────────────────────────────
 
 def parse_caption(caption):
-
     data = {
         "title": "",
         "subject": "",
@@ -104,14 +103,251 @@ def parse_caption(caption):
     if not caption:
         return data
 
-    lines = caption.splitlines()
+    # ─────────────────────────────────────
+    # NORMALIZE LINE
+    # Removes emojis / decorative symbols
+    # from the beginning of each line
+    # ─────────────────────────────────────
 
-    for line in lines:
-
+    def clean_line(line):
         line = line.strip()
+
+        # Remove common decorative characters/emojis
+        while line and not (
+            line[0].isalnum()
+            or line[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+            or "\u0900" <= line[0] <= "\u097F"
+            or "\u0A00" <= line[0] <= "\u0A7F"
+        ):
+            line = line[1:].strip()
+
+        return line
+
+    # ─────────────────────────────────────
+    # STYLISH FIELD NORMALIZER
+    # ─────────────────────────────────────
+
+    def normalize_label(label):
+
+        label = label.strip()
+
+        # Unicode stylish letters → normal letters
+        replacements = {
+            "ᴛ": "t",
+            "ᴛ": "t",
+            "ɪ": "i",
+            "ʟ": "l",
+            "ᴇ": "e",
+            "s": "s",
+            "S": "s",
+            "ᴜ": "u",
+            "ʙ": "b",
+            "ᴊ": "j",
+            "ᴏ": "o",
+            "ᴜ": "u",
+            "ᴅ": "d",
+            "ᴀ": "a",
+            "ɴ": "n",
+            "ᴄ": "c",
+            "ʜ": "h",
+            "ᴘ": "p",
+            "ʀ": "r",
+            "ᴛ": "t",
+            "ᴇ": "e",
+            "ᴍ": "m",
+            "ғ": "f",
+            "ᴄ": "c",
+            "ᴀ": "a",
+            "ᴛ": "t",
+            "ɢ": "g",
+            "ᴏ": "o",
+            "ʀ": "r",
+            "ʏ": "y",
+        }
+
+        for old, new in replacements.items():
+            label = label.replace(old, new)
+
+        return label.lower().strip()
+
+    # ─────────────────────────────────────
+    # READ EACH LINE
+    # ─────────────────────────────────────
+
+    for raw_line in caption.splitlines():
+
+        line = clean_line(raw_line)
 
         if not line:
             continue
+
+        # Split label and value
+        match = re.match(
+            r"^(.+?)\s*[-:]\s*(.+)$",
+            line
+        )
+
+        if not match:
+            continue
+
+        raw_label = match.group(1).strip()
+        value = match.group(2).strip()
+
+        label = normalize_label(raw_label)
+
+        # ─────────────────────────────
+        # ENGLISH / STYLISH ENGLISH
+        # ─────────────────────────────
+
+        if label == "title":
+            data["title"] = value
+            continue
+
+        if label == "subject":
+            data["subject"] = value
+            continue
+
+        if label == "chapter":
+            data["chapter"] = value
+            continue
+
+        if label == "category":
+            data["category"] = value
+            continue
+
+        if label in [
+            "item",
+            "letter",
+            "story",
+            "essay",
+            "notice",
+            "e-mail",
+            "email",
+        ]:
+
+            data["item_name"] = value
+
+            if label == "letter":
+                data["category"] = "Letter"
+
+            elif label == "story":
+                data["category"] = "Story"
+
+            elif label == "essay":
+                data["category"] = "Essay"
+
+            elif label == "notice":
+                data["category"] = "Notice"
+
+            elif label in ["email", "e-mail"]:
+                data["category"] = "E-mail"
+
+            continue
+
+        if label == "date":
+            data["date"] = value
+            continue
+
+        # ─────────────────────────────
+        # HINDI
+        # ─────────────────────────────
+
+        if raw_label == "शीर्षक":
+            data["title"] = value
+            continue
+
+        if raw_label == "विषय":
+            data["subject"] = value
+            continue
+
+        if raw_label == "अध्याय":
+            data["chapter"] = value
+            continue
+
+        if raw_label == "पत्र":
+            data["item_name"] = value
+            data["category"] = "Letter"
+            continue
+
+        if raw_label == "कहानी":
+            data["item_name"] = value
+            data["category"] = "Story"
+            continue
+
+        if raw_label == "लेख":
+            data["item_name"] = value
+            data["category"] = "Essay"
+            continue
+
+        if raw_label == "दिनांक":
+            data["date"] = value
+            continue
+
+        # ─────────────────────────────
+        # PUNJABI
+        # ─────────────────────────────
+
+        if raw_label == "ਸਿਰਲੇਖ":
+            data["title"] = value
+            continue
+
+        if raw_label == "ਵਿਸ਼ਾ":
+            data["subject"] = value
+            continue
+
+        if raw_label == "ਪਾਠ":
+            data["chapter"] = value
+            continue
+
+        if raw_label == "ਪੱਤਰ":
+            data["item_name"] = value
+            data["category"] = "Letter"
+            continue
+
+        if raw_label == "ਕਹਾਣੀ":
+            data["item_name"] = value
+            data["category"] = "Story"
+            continue
+
+        if raw_label == "ਲੇਖ":
+            data["item_name"] = value
+            data["category"] = "Essay"
+            continue
+
+        if raw_label == "ਮਿਤੀ":
+            data["date"] = value
+            continue
+
+    # ─────────────────────────────────────
+    # AUTO CATEGORY FROM TITLE
+    # ─────────────────────────────────────
+
+    title_lower = data["title"].lower()
+
+    if not data["category"]:
+
+        categories = [
+            "Chapter",
+            "Letter",
+            "Notice",
+            "E-mail",
+            "Email",
+            "Story",
+            "Essay",
+        ]
+
+        for category in categories:
+
+            if category.lower() in title_lower:
+
+                data["category"] = category
+
+                if category.lower() == "email":
+                    data["category"] = "E-mail"
+
+                break
+
+    return data
 
         # ─────────────────────────────
         # ENGLISH
