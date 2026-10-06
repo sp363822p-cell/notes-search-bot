@@ -475,12 +475,12 @@ async def chapter_menu(query, subject):
 
     keyboard = []
 
-    for chapter in chapters:
+    for index, chapter in enumerate(chapters):
 
         keyboard.append([
             InlineKeyboardButton(
                 f"📖 {chapter}",
-                callback_data=f"chapter|{subject}|{chapter}"
+                callback_data=f"ch|{subject}|{index}"
             )
         ])
 
@@ -508,58 +508,6 @@ async def chapter_menu(query, subject):
             "📖 *Sᴇʟᴇᴄᴛ Cʜᴀᴘᴛᴇʀ*\n"
             "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
             "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Cʜᴀᴘᴛᴇʀ*\n\n"
-            "🔄 *Rᴏᴛᴀᴛᴇ Yᴏᴜʀ Pʜᴏɴᴇ Tᴏ Sᴇᴇ Fᴜʟʟ Nᴀᴍᴇ*"
-        )
-
-    await query.edit_message_text(
-        message,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-
-# ─────────────────────────────────────
-# GRAMMAR MENU
-# ─────────────────────────────────────
-
-async def grammar_menu(query, subject):
-
-    categories = get_categories(subject)
-
-    keyboard = []
-
-    for category in categories:
-
-        keyboard.append([
-            InlineKeyboardButton(
-                f"📖 {category}",
-                callback_data=f"category|{subject}|{category}"
-            )
-        ])
-
-    keyboard.append([
-        InlineKeyboardButton(
-            "🔙 Bᴀᴄᴋ",
-            callback_data="get_note"
-        )
-    ])
-
-    if not categories:
-
-        message = (
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "📖 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "❌ *Nᴏ Cᴀᴛᴇɢᴏʀɪᴇs Fᴏᴜɴᴅ*"
-        )
-
-    else:
-
-        message = (
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "📖 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Cᴀᴛᴇɢᴏʀʏ*\n\n"
             "🔄 *Rᴏᴛᴀᴛᴇ Yᴏᴜʀ Pʜᴏɴᴇ Tᴏ Sᴇᴇ Fᴜʟʟ Nᴀᴍᴇ*"
         )
 
