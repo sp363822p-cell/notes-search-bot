@@ -728,50 +728,53 @@ async def button_handler(
         return
 
     # CHAPTER
-   if data.startswith("ch|"):
+       # CHAPTER
+    if data.startswith("ch|"):
 
-    parts = data.split("|", 2)
+        parts = data.split("|", 2)
 
-    subject = parts[1]
-    index = int(parts[2])
+        subject = parts[1]
+        index = int(parts[2])
 
-    chapters = get_chapters(subject)
+        chapters = get_chapters(subject)
 
-    if index >= len(chapters):
-        await query.edit_message_text(
-            "❌ *Cʜᴀᴘᴛᴇʀ Nᴏᴛ Fᴏᴜɴᴅ*",
-            parse_mode="Markdown"
+        if index >= len(chapters):
+            await query.edit_message_text(
+                "❌ *Cʜᴀᴘᴛᴇʀ Nᴏᴛ Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+            return
+
+        chapter = chapters[index]
+
+        note = find_note(
+            subject=subject,
+            chapter=chapter
         )
-        return
 
-    chapter = chapters[index]
+        if not note:
 
-    note = find_note(
-        subject=subject,
-        chapter=chapter
-    )
-
-    if not note:
-
-        match = re.search(r"(\d+)", chapter)
-
-        if match:
-
-            chapter_number = match.group(1)
-
-            note = find_note_by_chapter_number(
-                subject,
-                chapter_number
+            match = re.search(
+                r"(\d+)",
+                chapter
             )
 
-    await forward_note(
-        query,
-        context,
-        note
-    )
+            if match:
 
-    return
+                chapter_number = match.group(1)
 
+                note = find_note_by_chapter_number(
+                    subject,
+                    chapter_number
+                )
+
+        await forward_note(
+            query,
+            context,
+            note
+        )
+
+        return
         # If exact match fails, try chapter number
         if not note:
 
