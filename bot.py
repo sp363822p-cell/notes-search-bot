@@ -859,6 +859,7 @@ if data.startswith("category|"):
     return
         # Show category items
         # We use database directly
+               # Show category items
         from database import get_category_items
 
         items = get_category_items(
