@@ -847,14 +847,11 @@ async def direct_grammar_search(
                 )
             )
         ])
-
     if not items:
-
         await update.message.reply_text(
             "❌ *Nᴏ Nᴏᴛᴇs Fᴏᴜɴᴅ*",
             parse_mode="Markdown"
         )
-
         return
 
     await update.message.reply_text(
@@ -865,10 +862,7 @@ async def direct_grammar_search(
         reply_markup=InlineKeyboardMarkup(
             keyboard
         )
-    )
-
-
-# ─────────────────────────────────────
+    )# ─────────────────────────────────────
 # DIRECT MESSAGE SEARCH
 # ─────────────────────────────────────
 
