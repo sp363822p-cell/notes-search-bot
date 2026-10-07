@@ -801,13 +801,62 @@ async def button_handler(
         return
 
     # GRAMMAR CATEGORY
-    if data.startswith("category|"):
+    # GRAMMAR CATEGORY
+if data.startswith("category|"):
 
-        parts = data.split("|", 2)
+    parts = data.split("|", 2)
 
-        subject = parts[1]
-        category = parts[2]
+    subject = parts[1]
+    category = parts[2]
 
+    from database import get_category_items
+
+    items = get_category_items(
+        subject,
+        category
+    )
+
+    keyboard = []
+
+    for index, item in enumerate(items):
+
+        keyboard.append([
+            InlineKeyboardButton(
+                f"📖 {item}",
+                callback_data=f"gi|{subject}|{index}"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            "🔙 Bᴀᴄᴋ",
+            callback_data=f"subject|{subject}"
+        )
+    ])
+
+    if not items:
+
+        await query.edit_message_text(
+            "❌ *Nᴏ Iᴛᴇᴍs Fᴏᴜɴᴅ*",
+            parse_mode="Markdown"
+        )
+        return
+
+    message = (
+        "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+        "📖 *Sᴇʟᴇᴄᴛ Nᴏᴛᴇ*\n"
+        "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Nᴏᴛᴇ*\n\n"
+        "🔄 *Rᴏᴛᴀᴛᴇ Yᴏᴜʀ Pʜᴏɴᴇ Tᴏ Sᴇᴇ Fᴜʟʟ Nᴀᴍᴇ*"
+    )
+
+    await query.edit_message_text(
+        message,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+    return
         # Show category items
         # We use database directly
         from database import get_category_items
@@ -861,28 +910,57 @@ async def button_handler(
         return
 
     # GRAMMAR ITEM
-    if data.startswith("item|"):
+if data.startswith("gi|"):
 
-        parts = data.split("|", 3)
+    parts = data.split("|", 2)
 
-        subject = parts[1]
-        category = parts[2]
-        item_name = parts[3]
+    subject = parts[1]
+    index = int(parts[2])
 
-        note = find_grammar_note(
+    from database import get_categories, get_category_items
+
+    categories = get_categories(subject)
+
+    # This callback comes from the selected category.
+    # We find the item from the currently available category list.
+    found = False
+
+    for category in categories:
+
+        items = get_category_items(
             subject,
-            category,
-            item_name
+            category
         )
 
-        await forward_note(
-            query,
-            context,
-            note
+        if index < len(items):
+
+            item_name = items[index]
+
+            note = find_grammar_note(
+                subject,
+                category,
+                item_name
+            )
+
+            if note:
+
+                await forward_note(
+                    query,
+                    context,
+                    note
+                )
+
+                found = True
+                break
+
+    if not found:
+
+        await query.edit_message_text(
+            "❌ *Nᴏᴛᴇ Nᴏᴛ Fᴏᴜɴᴅ*",
+            parse_mode="Markdown"
         )
 
-        return
-
+    return
 
 # ─────────────────────────────────────
 # CHANNEL NOTE INDEXER
