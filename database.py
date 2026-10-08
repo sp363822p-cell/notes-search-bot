@@ -211,9 +211,24 @@ def parse_caption(caption):
             data["chapter"] = value
             continue
 
-        if label == "category":
-            data["category"] = value
-            continue
+       if label == "category":
+    category_value = value.strip()
+
+    category_map = {
+        "ਲੇਖ": "Essay",
+        "ਪੱਤਰ": "Letter",
+        "ਕਹਾਣੀ": "Story",
+        "लेख": "Essay",
+        "पत्र": "Letter",
+        "कहानी": "Story",
+    }
+
+    data["category"] = category_map.get(
+        category_value,
+        category_value
+    )
+
+    continue
 
         if label in [
             "item",
