@@ -193,7 +193,17 @@ def parse_caption(caption):
         raw_label = match.group(1).strip()
         value = match.group(2).strip()
 
-        label = normalize_label(raw_label)
+        # Explicit aliases for the stylish labels used in Notes Vault
+        label_aliases = {
+            "Tɪᴛʟᴇ": "title",
+            "Sᴜʙᴊᴇᴄᴛ": "subject",
+            "Cʜᴀᴘᴛᴇʀ": "chapter",
+            "Cᴀᴛᴇɢᴏʀʏ": "category",
+            "Iᴛᴇᴍ": "item",
+            "Dᴀᴛᴇ": "date",
+        }
+
+        label = label_aliases.get(raw_label, normalize_label(raw_label))
 
         # ─────────────────────────────
         # ENGLISH / STYLISH ENGLISH
@@ -211,24 +221,21 @@ def parse_caption(caption):
             data["chapter"] = value
             continue
 
-       if label == "category":
-    category_value = value.strip()
+        if label == "category":
+            category_map = {
+                "ਲੇਖ": "Essay",
+                "ਪੱਤਰ": "Letter",
+                "ਕਹਾਣੀ": "Story",
+                "लेख": "Essay",
+                "पत्र": "Letter",
+                "कहानी": "Story",
+            }
 
-    category_map = {
-        "ਲੇਖ": "Essay",
-        "ਪੱਤਰ": "Letter",
-        "ਕਹਾਣੀ": "Story",
-        "लेख": "Essay",
-        "पत्र": "Letter",
-        "कहानी": "Story",
-    }
-
-    data["category"] = category_map.get(
-        category_value,
-        category_value
-    )
-
-    continue
+            data["category"] = category_map.get(
+                value.strip(),
+                value.strip()
+            )
+            continue
 
         if label in [
             "item",
