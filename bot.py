@@ -1092,7 +1092,53 @@ async def message_search(
     # English Gr Notice
     # English Gr E-mail
     # ─────────────────────────────
+    # GRAMMAR SUBJECT - SHOW CATEGORY BUTTONS
 
+    grammar_subjects = {
+        "punjabi gr": "Punjabi Grammar",
+        "punjabi grammar": "Punjabi Grammar",
+        "hindi gr": "Hindi Grammar",
+        "hindi grammar": "Hindi Grammar",
+        "english gr": "English Grammar",
+        "english grammar": "English Grammar",
+    }
+
+    grammar_subject = grammar_subjects.get(text.lower())
+
+    if grammar_subject:
+        categories = get_categories(grammar_subject)
+        keyboard = []
+
+        for category in categories:
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📚 {category}",
+                    callback_data=f"category|{grammar_subject}|{category}"
+                )
+            ])
+
+        if keyboard:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🔙 Bᴀᴄᴋ",
+                    callback_data="get_note"
+                )
+            ])
+
+            await update.message.reply_text(
+                "📚 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n\n"
+                "👇 Choose Letter, Story, Essay or another category.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await update.message.reply_text(
+                "❌ *Nᴏ Cᴀᴛᴇɢᴏʀɪᴇs Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+
+        return
+        
     grammar_match = re.match(
         r"(?i)^(hindi|punjabi|english)\s+gr(?:ammar)?\s+"
         r"(letter|story|essay|notice|e-mail|email|chapter)$",
