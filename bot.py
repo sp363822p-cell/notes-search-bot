@@ -26,6 +26,10 @@ from database import (
     find_note,
     find_note_by_chapter_number,
     find_grammar_note,
+    get_subjects,
+    get_notes_for_removal,
+    count_notes_for_removal,
+    delete_note_by_id,
 )
 
 
@@ -1194,6 +1198,191 @@ async def message_search(
     )
 
 
+
+# ─────────────────────────────────────
+# ADMIN MANUAL REMOVE SYSTEM
+# Set ADMIN_ID in FadeHost environment variables.
+# This removes a record from notes.db (the bot's menu index);
+# it does not delete the original PDF/channel post.
+# ─────────────────────────────────────
+
+REMOVE_PAGE_SIZE = 15
+
+
+def is_admin_user(user_id):
+    admin_value = os.getenv("ADMIN_ID", "").strip()
+    if not admin_value:
+        return False
+    try:
+        return int(admin_value) == int(user_id)
+    except (TypeError, ValueError):
+        return False
+
+
+async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user:
+        await update.effective_message.reply_text(
+            f"Your Telegram ID: {update.effective_user.id}\n\n"
+            "Add this number as ADMIN_ID in FadeHost environment variables, "
+            "then restart the bot."
+        )
+
+
+async def remove_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user or not is_admin_user(user.id):
+        await update.effective_message.reply_text(
+            "⛔ You are not authorized to use this command."
+        )
+        return
+
+    subjects = get_subjects()
+    if not subjects:
+        await update.effective_message.reply_text("No notes are saved in the database.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(f"📚 {subject}", callback_data=f"rm_sub|{subject}|0")]
+        for subject in subjects
+    ]
+    await update.effective_message.reply_text(
+        "🗑️ MANUAL REMOVE\n\nSelect the subject whose menu entry you want to remove.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def remove_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    if not user or not is_admin_user(user.id):
+        await query.answer("Not authorized.", show_alert=True)
+        return
+
+    await query.answer()
+    data = query.data or ""
+    parts = data.split("|")
+
+    if parts[0] == "rm_sub" and len(parts) == 3:
+        subject = parts[1]
+        try:
+            page = max(0, int(parts[2]))
+        except ValueError:
+            page = 0
+        await show_removal_notes(query, subject, page)
+        return
+
+    if parts[0] == "rm_note" and len(parts) == 2:
+        try:
+            note_id = int(parts[1])
+        except ValueError:
+            return
+        from database import get_chapter_by_note_id
+        note = get_chapter_by_note_id(note_id)
+        if not note:
+            await query.edit_message_text("This entry was not found. It may already be removed.")
+            return
+        # Row shape: id, chat_id, message_id, title, subject, chapter, category, item_name, date
+        title = note[3] or note[5] or note[7] or "Untitled note"
+        subject = note[4] or "Unknown subject"
+        category = note[6] or ""
+        item_name = note[7] or ""
+        details = f"Title: {title}\nSubject: {subject}"
+        if category:
+            details += f"\nCategory: {category}"
+        if item_name:
+            details += f"\nItem: {item_name}"
+        keyboard = [[
+            InlineKeyboardButton("✅ YES, REMOVE ENTRY", callback_data=f"rm_yes|{note_id}"),
+            InlineKeyboardButton("❌ CANCEL", callback_data=f"rm_cancel|{subject}|0"),
+        ]]
+        await query.edit_message_text(
+            "⚠️ Confirm removal from the bot's menu database?\n\n"
+            f"{details}\n\n"
+            "The original PDF/channel post will NOT be deleted.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if parts[0] == "rm_yes" and len(parts) == 2:
+        try:
+            note_id = int(parts[1])
+        except ValueError:
+            return
+        deleted = delete_note_by_id(note_id)
+        if deleted:
+            await query.edit_message_text(
+                "✅ Entry removed from the bot's menu database.\n"
+                "The original PDF/channel post remains in Notes Vault."
+            )
+        else:
+            await query.edit_message_text("That entry was already removed or could not be found.")
+        return
+
+    if parts[0] == "rm_cancel" and len(parts) == 3:
+        await show_removal_notes(query, parts[1], max(0, int(parts[2])))
+        return
+
+
+async def show_removal_notes(query, subject, page):
+    total = count_notes_for_removal(subject)
+    offset = page * REMOVE_PAGE_SIZE
+    rows = get_notes_for_removal(subject, REMOVE_PAGE_SIZE, offset)
+
+    if not rows:
+        await query.edit_message_text(
+            f"No entries found for {subject}.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Subjects", callback_data="rm_home")
+            ]]),
+        )
+        return
+
+    keyboard = []
+    for row in rows:
+        note_id, title, row_subject, chapter, category, item_name = row
+        label = title or chapter or item_name or category or f"Note ID {note_id}"
+        label = str(label).replace("\n", " ")
+        if len(label) > 55:
+            label = label[:52] + "..."
+        keyboard.append([
+            InlineKeyboardButton(f"🗑️ {label}", callback_data=f"rm_note|{note_id}")
+        ])
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"rm_sub|{subject}|{page-1}"))
+    if offset + len(rows) < total:
+        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"rm_sub|{subject}|{page+1}"))
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("🔙 Subjects", callback_data="rm_home")])
+
+    await query.edit_message_text(
+        f"🗑️ MANUAL REMOVE\nSubject: {subject}\n"
+        f"Entries: {offset + 1}–{offset + len(rows)} of {total}\n\n"
+        "Select the exact entry to remove from the bot's menu:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def remove_home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    if not user or not is_admin_user(user.id):
+        await query.answer("Not authorized.", show_alert=True)
+        return
+    await query.answer()
+    subjects = get_subjects()
+    keyboard = [
+        [InlineKeyboardButton(f"📚 {subject}", callback_data=f"rm_sub|{subject}|0")]
+        for subject in subjects
+    ]
+    await query.edit_message_text(
+        "🗑️ MANUAL REMOVE\n\nSelect a subject:",
+        reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None,
+    )
+
+
 # ─────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────
@@ -1220,21 +1409,17 @@ def main():
     )
 
 
-    # /start
-    app.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
-    )
+    # Commands
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("myid", my_id))
+    app.add_handler(CommandHandler("remove", remove_start))
 
+    # Manual-remove callbacks must be registered before the general button handler.
+    app.add_handler(CallbackQueryHandler(remove_home_callback, pattern=r"^rm_home$"))
+    app.add_handler(CallbackQueryHandler(remove_callback, pattern=r"^rm_(?:sub|note|yes|cancel)\|"))
 
-    # Inline buttons
-    app.add_handler(
-        CallbackQueryHandler(
-            button_handler
-        )
-    )
+    # Normal inline buttons
+    app.add_handler(CallbackQueryHandler(button_handler))
 
 
     # Direct search
