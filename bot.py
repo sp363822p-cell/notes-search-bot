@@ -21,6 +21,8 @@ from database import (
     add_note,
     parse_caption,
     get_chapters,
+    get_exercises,
+    find_exercise_note,
     get_categories,
     get_category_items,
     find_note,
@@ -56,7 +58,7 @@ WELCOME_MESSAGE = (
 
 SUBJECTS = [
     "Science",
-    "Math",
+    "Mathematics",
     "English R",
     "English Grammar",
     "S.S.T",
@@ -226,6 +228,51 @@ async def chapter_menu(query, subject):
             "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
             "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Cʜᴀᴘᴛᴇʀ*\n\n"
             "🔄 *Rᴏᴛᴀᴛᴇ Yᴏᴜʀ Pʜᴏɴᴇ Tᴏ Sᴇᴇ Fᴜʟʟ Nᴀᴍᴇ*"
+        )
+
+    await query.edit_message_text(
+        message,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+# ─────────────────────────────────────
+# MATHEMATICS EXERCISE MENU
+# ─────────────────────────────────────
+
+async def exercise_menu(query, subject, chapter, chapter_index=None):
+    exercises = get_exercises(subject, chapter)
+    keyboard = []
+
+    for index, exercise in enumerate(exercises):
+        # Keep callback data short and resolve names from the database.
+        callback = f"ex|{chapter_index if chapter_index is not None else 0}|{index}"
+        keyboard.append([
+            InlineKeyboardButton(
+                f"📝 Exercise - {exercise}",
+                callback_data=callback
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton("🔙 Bᴀᴄᴋ", callback_data=f"subject|{subject}")
+    ])
+
+    if not exercises:
+        message = (
+            "📘 *Mᴀᴛʜᴇᴍᴀᴛɪᴄs — Sᴇʟᴇᴄᴛ E x e r c i s e*\n\n"
+            f"📖 Chapter: {chapter}\n\n"
+            "❌ Is chapter ke liye abhi koi exercise PDF indexed nahi hai.\n\n"
+            "PDF caption mein `Exercise - 1.1` jaisa field add karke upload karein."
+        )
+    else:
+        message = (
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "📝 *Sᴇʟᴇᴄᴛ E x e r c i s e*\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            f"📖 *Chapter:* {chapter}\n\n"
+            "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ E x e r c i s e*"
         )
 
     await query.edit_message_text(
@@ -467,6 +514,9 @@ async def button_handler(
             1
         )[1]
 
+        if subject.strip().lower() == "math":
+            subject = "Mathematics"
+
         if subject in GRAMMAR_SUBJECTS:
 
             await grammar_menu(
@@ -522,6 +572,11 @@ async def button_handler(
 
         chapter = chapters[index]
 
+        # Mathematics uses Chapter -> Exercise -> PDF. Other subjects keep the old flow.
+        if subject.strip().lower() in ("math", "mathematics"):
+            await exercise_menu(query, "Mathematics", chapter, index)
+            return
+
         # Exact chapter search
         note = find_note(
             subject=subject,
@@ -553,6 +608,38 @@ async def button_handler(
             note
         )
 
+        return
+
+
+    # ─────────────────────────────
+    # MATHEMATICS EXERCISE CALLBACK
+    # ex|chapter_index|exercise_index
+    # ─────────────────────────────
+
+    if data.startswith("ex|"):
+        parts = data.split("|", 2)
+        if len(parts) != 3:
+            return
+        try:
+            chapter_index = int(parts[1])
+            exercise_index = int(parts[2])
+        except ValueError:
+            return
+
+        chapters = get_chapters("Mathematics")
+        if chapter_index < 0 or chapter_index >= len(chapters):
+            await query.edit_message_text("❌ *Cʜᴀᴘᴛᴇʀ Nᴏᴛ Fᴏᴜɴᴅ*", parse_mode="Markdown")
+            return
+
+        chapter = chapters[chapter_index]
+        exercises = get_exercises("Mathematics", chapter)
+        if exercise_index < 0 or exercise_index >= len(exercises):
+            await query.edit_message_text("❌ *E x e r c i s e Nᴏᴛ Fᴏᴜɴᴅ*", parse_mode="Markdown")
+            return
+
+        exercise = exercises[exercise_index]
+        note = find_exercise_note("Mathematics", chapter, exercise)
+        await forward_note(query, context, note)
         return
 
 
@@ -730,6 +817,7 @@ async def channel_note_handler(
         title=data["title"],
         subject=data["subject"],
         chapter=data["chapter"],
+        exercise=data.get("exercise", ""),
         category=data["category"],
         item_name=data["item_name"],
         date=data["date"],
@@ -739,6 +827,7 @@ async def channel_note_handler(
         "Note indexed: "
         f"{data['subject']} | "
         f"{data['chapter'] or data['category']}"
+        f" | Exercise: {data.get('exercise', '')}"
     )
 
 
@@ -901,13 +990,14 @@ async def message_search(
 
     matched_subject = None
 
-    for subject in SUBJECTS:
-
-        if text.lower() == subject.lower():
-
-            matched_subject = subject
-
-            break
+    # Accept the old direct-search alias "Math", but show the canonical subject name.
+    if text.lower() in ("math", "mathematics"):
+        matched_subject = "Mathematics"
+    else:
+        for subject in SUBJECTS:
+            if text.lower() == subject.lower():
+                matched_subject = subject
+                break
 
     if matched_subject:
 
@@ -979,6 +1069,29 @@ async def message_search(
         subject = match.group(1).strip()
         chapter_number = match.group(2).strip()
 
+        if subject.lower() in ("math", "mathematics"):
+            subject = "Mathematics"
+            chapters = get_chapters(subject)
+            target_chapter = next(
+                (ch for ch in chapters if re.search(r"\d+", ch) and re.search(r"\d+", ch).group(0) == chapter_number),
+                None
+            )
+            if target_chapter:
+                exercises = get_exercises(subject, target_chapter)
+                keyboard = [
+                    [InlineKeyboardButton(f"📝 Exercise - {exercise}", callback_data=f"ex|{chapters.index(target_chapter)}|{i}")]
+                    for i, exercise in enumerate(exercises)
+                ]
+                keyboard.append([InlineKeyboardButton("🔙 Bᴀᴄᴋ", callback_data=f"subject|{subject}")])
+                await update.message.reply_text(
+                    f"📝 *Sᴇʟᴇᴄᴛ E x e r c i s e*\n\n📖 Chapter: {target_chapter}",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                await update.message.reply_text("❌ *Cʜᴀᴘᴛᴇʀ Nᴏᴛ Fᴏᴜɴᴅ*", parse_mode="Markdown")
+            return
+
         note = find_note_by_chapter_number(
             subject,
             chapter_number
@@ -1039,8 +1152,8 @@ async def message_search(
             ],
             [
                 InlineKeyboardButton(
-                    "➗ Mᴀᴛʜ",
-                    callback_data="subject|Math"
+                    "➗ Mᴀᴛʜᴇᴍᴀᴛɪᴄs",
+                    callback_data="subject|Mathematics"
                 )
             ],
             [
