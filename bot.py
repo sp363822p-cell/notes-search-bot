@@ -937,4 +937,636 @@ async def direct_grammar_search(
                 callback_data=(
                     f"gi|{subject}|"
                     f"{actual_category}|{index}"
-               
+                )
+            )
+        ])
+    if not items:
+        await update.message.reply_text(
+            "❌ *Nᴏ Nᴏᴛᴇs Fᴏᴜɴᴅ*",
+            parse_mode="Markdown"
+        )
+        return
+
+    await update.message.reply_text(
+        f"📖 *Sᴇʟᴇᴄᴛ {actual_category}*\n\n"
+        "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Nᴏᴛᴇ*\n\n"
+        "🔄 *Rᴏᴛᴀᴛᴇ Yᴏᴜʀ Pʜᴏɴᴇ Tᴏ Sᴇᴇ Fᴜʟʟ Nᴀᴍᴇ*",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(
+            keyboard
+        )
+    )# ─────────────────────────────────────
+# DIRECT MESSAGE SEARCH
+# ─────────────────────────────────────
+
+async def message_search(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    if not update.message:
+        return
+
+    text = update.message.text.strip()
+
+    if not text:
+        return
+
+    # Ignore commands
+    if text.startswith("/"):
+        return
+
+    print(
+        f"Search received: {text}"
+    )
+
+
+    # ─────────────────────────────
+    # SUBJECT ONLY
+    # Example:
+    # Science
+    # Hindi Grammar
+    # ─────────────────────────────
+
+    matched_subject = None
+
+    # Accept the old direct-search alias "Math", but show the canonical subject name.
+    if text.lower() in ("math", "mathematics"):
+        matched_subject = "Mathematics"
+    else:
+        for subject in SUBJECTS:
+            if text.lower() == subject.lower():
+                matched_subject = subject
+                break
+
+    if matched_subject:
+
+        # Grammar subject
+        if matched_subject in GRAMMAR_SUBJECTS:
+
+            categories = get_categories(
+                matched_subject
+            )
+
+            keyboard = []
+
+            for category in categories:
+
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📖 {category}",
+                        callback_data=(
+                            f"category|"
+                            f"{matched_subject}|"
+                            f"{category}"
+                        )
+                    )
+                ])
+
+            if not categories:
+
+                await update.message.reply_text(
+                    "❌ *Nᴏ Cᴀᴛᴇɢᴏʀɪᴇs Fᴏᴜɴᴅ*",
+                    parse_mode="Markdown"
+                )
+
+                return
+
+            await update.message.reply_text(
+                "📖 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n\n"
+                "👇 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Yᴏᴜʀ Cᴀᴛᴇɢᴏʀʏ*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    keyboard
+                )
+            )
+
+        else:
+
+            await send_subject_chapters(
+                update,
+                matched_subject
+            )
+
+        return
+
+
+    # ─────────────────────────────
+    # SUBJECT + CHAPTER
+    #
+    # Example:
+    # Science Ch - 1
+    # Hindi R Ch - 3
+    # ─────────────────────────────
+
+    match = re.match(
+        r"(?i)^(.+?)\s+ch\s*[-.]?\s*(\d+)\s*$",
+        text
+    )
+
+    if match:
+
+        subject = match.group(1).strip()
+        chapter_number = match.group(2).strip()
+
+        if subject.lower() in ("math", "mathematics"):
+            subject = "Mathematics"
+            chapters = get_chapters(subject)
+            target_chapter = next(
+                (ch for ch in chapters if re.search(r"\d+", ch) and re.search(r"\d+", ch).group(0) == chapter_number),
+                None
+            )
+            if target_chapter:
+                exercises = get_exercises(subject, target_chapter)
+                keyboard = [
+                    [InlineKeyboardButton(f"📝 Exercise - {exercise}", callback_data=f"ex|{chapters.index(target_chapter)}|{i}")]
+                    for i, exercise in enumerate(exercises)
+                ]
+                keyboard.append([InlineKeyboardButton("🔙 Bᴀᴄᴋ", callback_data=f"subject|{subject}")])
+                await update.message.reply_text(
+                    f"📝 *Sᴇʟᴇᴄᴛ E x e r c i s e*\n\n📖 Chapter: {target_chapter}",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                await update.message.reply_text("❌ *Cʜᴀᴘᴛᴇʀ Nᴏᴛ Fᴏᴜɴᴅ*", parse_mode="Markdown")
+            return
+
+        note = find_note_by_chapter_number(
+            subject,
+            chapter_number
+        )
+
+        if note:
+
+            try:
+
+                await context.bot.forward_message(
+                    chat_id=update.message.chat.id,
+                    from_chat_id=note[0],
+                    message_id=note[1],
+                )
+
+            except Exception as error:
+
+                print(
+                    f"Search forward error: {error}"
+                )
+
+                await update.message.reply_text(
+                    "❌ *Nᴏᴛᴇ Sᴇɴᴅ Nᴀʜɪ Hᴜᴀ*",
+                    parse_mode="Markdown"
+                )
+
+        else:
+
+            await update.message.reply_text(
+                "❌ *Nᴏᴛᴇ Nᴏᴛ Fᴏᴜɴᴅ*\n\n"
+                "📚 Is chapter ka note database mein nahi mila.",
+                parse_mode="Markdown"
+            )
+
+        return
+
+
+    # ─────────────────────────────
+    # CH - NUMBER
+    #
+    # Example:
+    # Ch - 1
+    # ─────────────────────────────
+
+    match = re.match(
+        r"(?i)^ch\s*[-.]?\s*(\d+)\s*$",
+        text
+    )
+
+    if match:
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🔬 Sᴄɪᴇɴᴄᴇ",
+                    callback_data="subject|Science"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "➗ Mᴀᴛʜᴇᴍᴀᴛɪᴄs",
+                    callback_data="subject|Mathematics"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📘 Eɴɢʟɪsʜ R",
+                    callback_data="subject|English R"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🌍 S.Sᴛ",
+                    callback_data="subject|S.S.T"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "💻 Cᴏᴍᴘᴜᴛᴇʀ",
+                    callback_data="subject|Computer"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📗 Pᴜɴᴊᴀʙɪ R",
+                    callback_data="subject|Punjabi R"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📕 Hɪɴᴅɪ R",
+                    callback_data="subject|Hindi R"
+                )
+            ],
+        ]
+
+        await update.message.reply_text(
+            "📚 *Pʟᴇᴀsᴇ Sᴇʟᴇᴄᴛ Sᴜʙᴊᴇᴄᴛ Fɪʀsᴛ*",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
+        )
+
+        return
+
+
+    # ─────────────────────────────
+    # GRAMMAR SEARCH
+    #
+    # Examples:
+    # Hindi Gr Letter
+    # Punjabi Gr Story
+    # English Gr Essay
+    # English Gr Notice
+    # English Gr E-mail
+    # ─────────────────────────────
+    # GRAMMAR SUBJECT - SHOW CATEGORY BUTTONS
+
+    grammar_subjects = {
+        "punjabi gr": "Punjabi Grammar",
+        "punjabi grammar": "Punjabi Grammar",
+        "hindi gr": "Hindi Grammar",
+        "hindi grammar": "Hindi Grammar",
+        "english gr": "English Grammar",
+        "english grammar": "English Grammar",
+    }
+
+    grammar_subject = grammar_subjects.get(text.lower())
+
+    if grammar_subject:
+        categories = get_categories(grammar_subject)
+        keyboard = []
+
+        for category in categories:
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📚 {category}",
+                    callback_data=f"category|{grammar_subject}|{category}"
+                )
+            ])
+
+        if keyboard:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🔙 Bᴀᴄᴋ",
+                    callback_data="get_note"
+                )
+            ])
+
+            await update.message.reply_text(
+                "📚 *Sᴇʟᴇᴄᴛ Cᴀᴛᴇɢᴏʀʏ*\n\n"
+                "👇 Choose Letter, Story, Essay or another category.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await update.message.reply_text(
+                "❌ *Nᴏ Cᴀᴛᴇɢᴏʀɪᴇs Fᴏᴜɴᴅ*",
+                parse_mode="Markdown"
+            )
+
+        return
+        
+    grammar_match = re.match(
+        r"(?i)^(hindi|punjabi|english)\s+gr(?:ammar)?\s+"
+        r"(letter|story|essay|notice|e-mail|email|chapter)$",
+        text
+    )
+
+    if grammar_match:
+
+        language = (
+            grammar_match.group(1).lower()
+        )
+
+        category = (
+            grammar_match.group(2)
+        )
+
+        if language == "hindi":
+
+            subject = "Hindi Grammar"
+
+        elif language == "punjabi":
+
+            subject = "Punjabi Grammar"
+
+        else:
+
+            subject = "English Grammar"
+
+        if category.lower() == "email":
+
+            category = "E-mail"
+
+        await direct_grammar_search(
+            update,
+            subject,
+            category
+        )
+
+        return
+
+
+    # ─────────────────────────────
+    # UNKNOWN SEARCH
+    # ─────────────────────────────
+
+    await update.message.reply_text(
+        "🔎 *Nᴏᴛᴇ Fᴏᴜɴᴅ Nᴀʜɪ*\n\n"
+        "💡 Example:\n"
+        "`Science`\n"
+        "`Science Ch - 1`\n"
+        "`Hindi Gr Letter`",
+        parse_mode="Markdown"
+    )
+
+
+
+# ─────────────────────────────────────
+# ADMIN MANUAL REMOVE SYSTEM
+# Set ADMIN_ID in FadeHost environment variables.
+# This removes a record from notes.db (the bot's menu index);
+# it does not delete the original PDF/channel post.
+# ─────────────────────────────────────
+
+REMOVE_PAGE_SIZE = 15
+
+
+def is_admin_user(user_id):
+    admin_value = os.getenv("ADMIN_ID", "").strip()
+    if not admin_value:
+        return False
+    try:
+        return int(admin_value) == int(user_id)
+    except (TypeError, ValueError):
+        return False
+
+
+async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user:
+        await update.effective_message.reply_text(
+            f"Your Telegram ID: {update.effective_user.id}\n\n"
+            "Add this number as ADMIN_ID in FadeHost environment variables, "
+            "then restart the bot."
+        )
+
+
+async def remove_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user or not is_admin_user(user.id):
+        await update.effective_message.reply_text(
+            "⛔ You are not authorized to use this command."
+        )
+        return
+
+    subjects = get_subjects()
+    if not subjects:
+        await update.effective_message.reply_text("No notes are saved in the database.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(f"📚 {subject}", callback_data=f"rm_sub|{subject}|0")]
+        for subject in subjects
+    ]
+    await update.effective_message.reply_text(
+        "🗑️ MANUAL REMOVE\n\nSelect the subject whose menu entry you want to remove.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def remove_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    if not user or not is_admin_user(user.id):
+        await query.answer("Not authorized.", show_alert=True)
+        return
+
+    await query.answer()
+    data = query.data or ""
+    parts = data.split("|")
+
+    if parts[0] == "rm_sub" and len(parts) == 3:
+        subject = parts[1]
+        try:
+            page = max(0, int(parts[2]))
+        except ValueError:
+            page = 0
+        await show_removal_notes(query, subject, page)
+        return
+
+    if parts[0] == "rm_note" and len(parts) == 2:
+        try:
+            note_id = int(parts[1])
+        except ValueError:
+            return
+        from database import get_chapter_by_note_id
+        note = get_chapter_by_note_id(note_id)
+        if not note:
+            await query.edit_message_text("This entry was not found. It may already be removed.")
+            return
+        # Row shape: id, chat_id, message_id, title, subject, chapter, category, item_name, date
+        title = note[3] or note[5] or note[7] or "Untitled note"
+        subject = note[4] or "Unknown subject"
+        category = note[6] or ""
+        item_name = note[7] or ""
+        details = f"Title: {title}\nSubject: {subject}"
+        if category:
+            details += f"\nCategory: {category}"
+        if item_name:
+            details += f"\nItem: {item_name}"
+        keyboard = [[
+            InlineKeyboardButton("✅ YES, REMOVE ENTRY", callback_data=f"rm_yes|{note_id}"),
+            InlineKeyboardButton("❌ CANCEL", callback_data=f"rm_cancel|{subject}|0"),
+        ]]
+        await query.edit_message_text(
+            "⚠️ Confirm removal from the bot's menu database?\n\n"
+            f"{details}\n\n"
+            "The original PDF/channel post will NOT be deleted.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if parts[0] == "rm_yes" and len(parts) == 2:
+        try:
+            note_id = int(parts[1])
+        except ValueError:
+            return
+        deleted = delete_note_by_id(note_id)
+        if deleted:
+            await query.edit_message_text(
+                "✅ Entry removed from the bot's menu database.\n"
+                "The original PDF/channel post remains in Notes Vault."
+            )
+        else:
+            await query.edit_message_text("That entry was already removed or could not be found.")
+        return
+
+    if parts[0] == "rm_cancel" and len(parts) == 3:
+        await show_removal_notes(query, parts[1], max(0, int(parts[2])))
+        return
+
+
+async def show_removal_notes(query, subject, page):
+    total = count_notes_for_removal(subject)
+    offset = page * REMOVE_PAGE_SIZE
+    rows = get_notes_for_removal(subject, REMOVE_PAGE_SIZE, offset)
+
+    if not rows:
+        await query.edit_message_text(
+            f"No entries found for {subject}.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Subjects", callback_data="rm_home")
+            ]]),
+        )
+        return
+
+    keyboard = []
+    for row in rows:
+        note_id, title, row_subject, chapter, category, item_name = row
+        label = title or chapter or item_name or category or f"Note ID {note_id}"
+        label = str(label).replace("\n", " ")
+        if len(label) > 55:
+            label = label[:52] + "..."
+        keyboard.append([
+            InlineKeyboardButton(f"🗑️ {label}", callback_data=f"rm_note|{note_id}")
+        ])
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"rm_sub|{subject}|{page-1}"))
+    if offset + len(rows) < total:
+        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"rm_sub|{subject}|{page+1}"))
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("🔙 Subjects", callback_data="rm_home")])
+
+    await query.edit_message_text(
+        f"🗑️ MANUAL REMOVE\nSubject: {subject}\n"
+        f"Entries: {offset + 1}–{offset + len(rows)} of {total}\n\n"
+        "Select the exact entry to remove from the bot's menu:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def remove_home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    if not user or not is_admin_user(user.id):
+        await query.answer("Not authorized.", show_alert=True)
+        return
+    await query.answer()
+    subjects = get_subjects()
+    keyboard = [
+        [InlineKeyboardButton(f"📚 {subject}", callback_data=f"rm_sub|{subject}|0")]
+        for subject in subjects
+    ]
+    await query.edit_message_text(
+        "🗑️ MANUAL REMOVE\n\nSelect a subject:",
+        reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None,
+    )
+
+
+# ─────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────
+
+def main():
+
+    token = os.getenv(
+        "BOT_TOKEN"
+    )
+
+    if not token:
+
+        raise ValueError(
+            "BOT_TOKEN is not set"
+        )
+
+    setup_database()
+
+    app = (
+        Application
+        .builder()
+        .token(token)
+        .build()
+    )
+
+
+    # Commands
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("myid", my_id))
+    app.add_handler(CommandHandler("remove", remove_start))
+
+    # Manual-remove callbacks must be registered before the general button handler.
+    app.add_handler(CallbackQueryHandler(remove_home_callback, pattern=r"^rm_home$"))
+    app.add_handler(CallbackQueryHandler(remove_callback, pattern=r"^rm_(?:sub|note|yes|cancel)\|"))
+
+    # Normal inline buttons
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+
+    # Direct search
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            message_search
+        )
+    )
+
+
+    # Notes Vault channel
+    app.add_handler(
+        MessageHandler(
+            filters.UpdateType.CHANNEL_POST,
+            channel_note_handler
+        )
+    )
+
+
+    print(
+        "Nᴏᴛᴇs Sᴇᴀʀᴄʜ Bᴏᴛ is running..."
+    )
+
+
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES
+    )
+
+
+# ─────────────────────────────────────
+# RUN
+# ─────────────────────────────────────
+
+if __name__ == "__main__":
+
+    main()
